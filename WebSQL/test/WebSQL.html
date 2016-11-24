@@ -1,0 +1,275 @@
+<!doctype html>
+<html>
+<head>
+	<script src="http://code.jquery.com/jquery-latest.js"></script>
+	<link rel="stylesheet" href="http://code.jquery.com/qunit/qunit-1.12.0.css" type="text/css" media="screen" />
+	<script type="text/javascript" src="http://code.jquery.com/qunit/qunit-1.12.0.js"></script>
+
+	<script src="../WebSQL.js"></script>
+
+	<script>
+	$(function () {
+
+		var failCB = function (text) {
+			return function () {
+				ok(false, text);
+				start();
+			};
+		};
+
+		test('browser support', function () {
+			ok(!!window.openDatabase, 'openDatabase exists');
+
+			var db = openDatabase('test', '1.0', 'database test', 5e6);
+			ok(db, 'open database connection');
+
+			equal(typeof db.transaction, 'function', 'transaction function exists');
+		});
+
+
+		test('WebSQL object', function () {
+			ok(WebSQL, 'global object exists');
+			equal(typeof WebSQL.Deferred, 'function', 'Deferred is function');
+			equal(typeof WebSQL.when, 'function', 'when is function');
+			equal(typeof WebSQL.VERSION, 'string', 'Version number is exposed');
+		});
+
+
+		test('WebSQL instance', function () {
+			var db = WebSQL('test');
+			ok(db, 'create websql object');
+
+			equal(typeof db.query, 'function', 'query is function');
+			equal(typeof db.rawTx, 'function', 'rawTx is function');
+		});
+
+
+		var testPromise = function (promise) {
+			ok(promise, 'query returned promise');
+			equal(typeof promise.fail, 'function', 'promise has fail function');
+			equal(typeof promise.done, 'function', 'promise has done function');
+			equal(typeof promise.then, 'function', 'promise has then function');
+			equal(typeof promise.always, 'function', 'promise has always function');
+
+			var failPromise = promise.fail(failCB('query failed'));
+			strictEqual(promise, failPromise, 'fail returned promise for chaining');
+
+			var donePromise = promise.done(function (res) {
+				ok($.isArray(res), 'results are array');
+			});
+			strictEqual(promise, donePromise, 'done returned promise for chaining');
+		};
+
+
+		asyncTest('rawTx', function () {
+			var db = WebSQL('test');
+			db.rawTx(function (tx) {
+				ok(tx, 'transaction exists');
+				start();
+			});
+		});
+
+
+		asyncTest('single query', function () {
+			var db = WebSQL('test');
+			var promise = db.query('SELECT 1 AS num');
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 1, 'result includes 1 row');
+				strictEqual(res[0].num, 1, 'results match query');
+				start();
+			});
+		});
+
+
+		asyncTest('single query with params', function () {
+			var db = WebSQL('test');
+			var promise = db.query('SELECT ? AS num', [1]);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 1, 'result includes 1 row');
+				strictEqual(res[0].num, 1, 'results match query');
+				start();
+			});
+		});
+
+
+		asyncTest('multi query', function () {
+			var db = WebSQL('test');
+			var promise = db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (num INTEGER)',
+				'SELECT * FROM tests'
+			);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 0, 'result includes 0 row');
+				strictEqual(res[0], void null, 'results match query');
+				start();
+			});
+		});
+
+
+		asyncTest('multi query inserts w/ ?', function () {
+			var db = WebSQL('test');
+			var promise = db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)',
+				'INSERT INTO tests (num) VALUES (?)',
+				[ [1], [2], [3] ],
+				'SELECT * FROM tests'
+			);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 3, 'result includes 3 rows');
+				equal(typeof res[1], 'object', 'results are objects');
+				strictEqual(res[0].num, 1, 'results match query');
+				start();
+			});
+		});
+
+
+		asyncTest('multi query inserts w/o ?', function () {
+			var db = WebSQL('test');
+			var promise = db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)',
+				'INSERT INTO tests (num)',
+				[ [4], [5] ],
+				'SELECT * FROM tests'
+			);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 2, 'result includes 2 rows');
+				equal(typeof res[1], 'object', 'results are objects');
+				strictEqual(res[0].num, 4, 'results match query');
+				start();
+			});
+		});
+
+
+		asyncTest('multiline query', function () {
+			var db = WebSQL('test');
+			db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)',
+				'INSERT INTO tests (num)',
+				[ [4], [5] ]
+			);
+
+			var promise = db.query(function(){/*!
+				SELECT *
+				FROM tests
+				WHERE num > 1
+				ORDER BY id
+			*/});
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.length, 2, 'result includes 2 rows');
+				equal(typeof res[1], 'object', 'results are objects');
+				strictEqual(res[0].id, 1, 'results (id) match query');
+				strictEqual(res[0].num, 4, 'results (num) match query');
+				start();
+			});
+		});
+
+
+		asyncTest('single insert', function () {
+			var db = WebSQL('test');
+			db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)'
+			);
+
+			var promise = db.query('INSERT INTO tests (num)', [6]);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.insertId, 1, 'Insert ID matched');
+				start();
+			});
+		});
+
+
+		asyncTest('single replace', function () {
+			var db = WebSQL('test');
+			db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)'
+			);
+
+			var promise = db.query('REPLACE INTO tests (num)', [6]);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.insertId, 1, 'Insert ID matched');
+				start();
+			});
+		});
+
+
+		asyncTest('multi insert', function () {
+			var db = WebSQL('test');
+			db.query(
+				'DROP TABLE IF EXISTS tests',
+				'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)'
+			);
+
+			var promise = db.query('INSERT INTO tests (num)', [ [7], [8] ]);
+
+			testPromise(promise);
+			promise.done(function (res) {
+				strictEqual(res.insertId, 2, 'Insert ID matched');
+				start();
+			});
+		});
+
+		asyncTest('dump json', function () {
+			var db = WebSQL('test');
+			var createTableSQL = 'CREATE TABLE tests (id INTEGER PRIMARY KEY AUTOINCREMENT, num INTEGER)';
+			var createIndexSQL = 'CREATE INDEX tests_num ON tests (num)';
+			var promise = db.query(
+				'DROP TABLE IF EXISTS tests',
+				createTableSQL,
+				createIndexSQL,
+				'INSERT INTO tests (num)',
+				[ [6], [7], [8], [9] ]
+			);
+
+			testPromise(promise);
+			promise.done(function () {
+				db.dump('json', true)
+					.fail(failCB('dump failed'))
+					.done(function (json) {
+						equal(typeof json, 'object', 'Results came back');
+						equal(typeof json['tests'], 'object', 'Tests table exists');
+						equal(json.tests.data.constructor, Array, 'Data is an array');
+						equal(json.tests.data[1].num, 7, 'Value exported correctly');
+						equal(json.tests.schema.table, createTableSQL, 'Create table SQL matches');
+						equal(json.tests.schema.indexes.length, 1, 'One index');
+						equal(json.tests.schema.indexes[0], createIndexSQL, 'Create index SQL matches');
+						start();
+					});
+			});
+
+		})
+
+	});
+	</script>
+
+</head>
+<body>
+	<h1 id="qunit-header">QUnit example</h1>
+	<h2 id="qunit-banner"></h2>
+	<div id="qunit-testrunner-toolbar"></div>
+	<h2 id="qunit-userAgent"></h2>
+	<ol id="qunit-tests"></ol>
+	<div id="qunit-fixture">test markup, will be hidden</div>
+</body>
+</html>

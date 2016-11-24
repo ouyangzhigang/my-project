@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>webSQL</title>
+</head>
+<body>
+  <div class="webSQL">
+    <h1>webSQL</h1>
+
+  </div>
+</body>
+<script type="text/javascript">
+// !window.openDatabase 检测浏览器是否支持webSQL
+  var user = {}
+  user.name = "OUYANGZHIGANG"
+  var webSQL = openDatabase('DEMO', '1.0.0', 'DEMO-database', '10241024');
+// 创建数据库
+/* ====================================================================================
+        function initDB(){
+         var myDB = null;
+            try {
+                if (!window.openDatabase) {
+                    // 您的浏览器版本太低，请升级更新
+                    alert('db not supported');
+                } else {
+                    var shortName = 'database';
+                    var version = '1.0';
+                    var displayName = 'webfront cache of SQL';
+                    var maxSize = 65536; // 字节
+                    myDB = openDatabase(shortName, version, displayName, maxSize);
+                }
+            } catch(e) {
+                // 这里开始异常处理 .
+                if (e == INVALID_STATE_ERR) {
+                    // 数据库版本异常 .
+                    alert("Invalid database version.");
+                } else {
+                    alert('您的浏览器版本太低，请升级更新');
+                }
+            }
+            // 返回创建好的数据库实例
+            return myDB;
+         }
+        var webSQL = initDB
+  ===================================================================================== */
+
+
+
+// 1024 字节单位  1k      1024 * 1024 —— 1M
+
+/* =================================================================================
+    transaction方法用以处理事务，当一条语句执行失败的时候，整个事务回滚。方法有三个参数
+
+    包含事务内容的一个方法
+    执行成功回调函数（可选）
+    执行失败回调函数（可选）
+   ================================================================================= */
+  webSQL.transaction(function (context) {
+    // update create insert drop select
+    context.executeSql('CREATE TABLE IF NOT EXISTS LOGS (id unique, log)');
+    context.executeSql('INSERT INTO LOGS (id, log) VALUES (1, "foobar")');
+    context.executeSql('INSERT INTO LOGS (id, log) VALUES (2, "logmsg")');
+
+    // context.executeSql('CREATE TABLE IF NOT EXISTS User (name unique, age)');
+    // context.executeSql('INSERT INTO User values(?,?)', ["mark", 60], function (result) { console.log(result)}, function (tx, err) {console.log(tx + err)});
+
+    context.executeSql('CREATE TABLE IF NOT EXISTS CALL (name unique, age)');
+    // context.executeSql('CREATE TABLE IF NOT EXISTS CALL (id TEXT, log)');
+    context.executeSql('INSERT INTO CALL (name, age) VALUES ("FJOWQF", "78948977")')
+
+    context.executeSql('CREATE TABLE IF NOT EXISTS CUSTOMER (id unique, name)');
+    for (var i = 0; i < 9; i++) {
+      context.executeSql('INSERT INTO CUSTOMER (id, name) VALUES ('+ i +', "'+ user.name + i +'")');
+    }
+
+    context.executeSql('SELECT * FROM CUSTOMER', [], function (context, result) {
+      // console.log(result.rows.length); // 9
+      for (var i = 0; i < result.rows.length; i++) {
+        console.log(result.rows[i].name)
+      }
+    })
+
+    context.executeSql('DROP TABLE CALL')
+  })
+
+/* ================================================================================
+      executeSql
+      executeSql方法用以执行SQL语句，返回结果，方法有四个参数
+
+      查询字符串
+      用以替换查询字符串中问号的参数
+      执行成功回调函数（可选）
+      执行失败回调函数（可选）
+   ================================================================================ */
+
+
+
+</script>
+</html>

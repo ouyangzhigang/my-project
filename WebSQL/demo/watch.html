@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>数据库面试题 引发 webSQL</title>
+	<style>
+
+		table,
+		th,
+		tr,
+		td{
+			border:1px solid #000;
+			text-align:left;
+			text-indent:14px;
+			border-collapse:collapse;
+		}
+		#info_show{
+			margin-top: 20px;
+		}
+		#info_show table{
+			width: 600px;
+		}
+		table td{
+			height: 20px;
+		}
+	</style>
+</head>
+<body>
+	<div id="sub">
+		<label for="user_id">编号：</label> <input type="text" name="user_id" id="user_id">
+		<label for="user_name">姓名：</label> <input type="text" name="user_name" id="user_name">
+		<label for="score">分数：</label> <input type="text" name="score" id="score">
+		<input type="button" value="保存" id="save_btn">
+	</div>
+	<button id="clear_all">清空</button>
+	<div id="info_show">
+		<table>
+			<tr>
+				<td>编号</td>
+				<td>姓名</td>
+				<td>分数</td>
+			</tr>
+			<tbody id="info_table">
+			</tbody>
+			<tr>
+				<td>合计</td>
+				<td></td>
+				<td id="average"></td>
+			</tr>
+		</table>
+	</div>
+
+	<script>
+		window.onload = function(){
+			//获取元素的过程
+			var oSave = document.getElementById('save_btn');
+			var oUserId = document.getElementById('user_id');
+			var oUserName = document.getElementById('user_name');
+			var oScore = document.getElementById('score');
+			var oTable = document.getElementById('info_table');
+			var oAvg = document.getElementById('average');
+			var oClearAll = document.getElementById('clear_all');
+
+			/*
+			//子线程(先放置)
+			//a) 用户可在三个输入框内输入数据，点保存，开启新的线程保存数据。
+			function subThread(){
+				//开新线程(目前没做任何数据处理)
+				var w1 = new Worker('data.js');
+				// console.log(w1);
+				w1.postMessage({
+					"user_id":oUserId.value,
+					"user_name":oUserName.value,
+					"score":oScore.value,
+					"control":dataHandler // Failed to execute 'postMessage' on 'Worker': An object could not be cloned
+				});
+
+				//接收返回结果 (相当于进子线程溜达一圈又回来了)
+				w1.onmessage = function(ev){
+					console.log(ev.data);
+				};
+			}
+			*/
+
+			/*
+			//对象的形式（尝试） [失败，子线程的postMessage不能传对象]
+			var dataHandler = {
+				db:openDatabase('score_manager',0.1,'this is a student score manager base',200),
+				createTable:function (){
+					var createTable = 'CREATE TABLE score(user_id INT,user_name VARCHAR,score INT)';
+					db.transaction(function(tx){
+						tx.executeSql(createTable);
+					});
+				},
+				saveData:function (id,name,score){
+					var insertData = 'INSERT INTO score VALUES('+id+','+name+','+score+')';
+					db.transaction(function(tx){
+						tx.executeSql(insertData);
+					});
+				},
+				selectData:function (){
+					var selectAll = 'SELECT * FROM score';
+					var resArr = [];
+					db.transaction(function(tx){
+						tx.executeSql(selectAll,[],function(tx,res){
+							var len = res.rows.length;
+							for(var i=0; i<len; i++){
+								var tempdata = {};
+								for(var name in res.rows.item(i)){
+									// console.log(name);
+									tempdata[name] = res.rows.item(i)[name];
+								}
+								resArr.push(tempdata);
+							}
+							resArr.sort(function(n1,n2){
+								return parseInt(n2['user_id']) - parseInt(n1['user_id']);
+							});
+							return resArr;
+						});
+					});
+				}
+			};
+			*/
+
+
+			//页面加载的时候创建一个webSQL数据库
+			var  db = openDatabase('score_manager',0.1,'this is a student score manager base',200);
+
+			function createTable(){
+				//判断有没有score表存在如果没有创建score表创建一个webSQL数据库
+
+				//问题，怎样判断webSQL中是否有某一个表？
+
+				//创建表的SQL语句
+				var createTable = 'CREATE TABLE score(user_id VARCHAR,user_name VARCHAR,score INT)';
+
+				db.transaction(function(tx){
+					tx.executeSql(createTable);
+				});
+			}
+			//页面加载创建表
+			createTable();
+
+			//添加数据
+			function saveData(){
+				//b) 将数据保存到数据库。
+
+				//插入数据行的SQL语句
+				var insertData = 'INSERT INTO score VALUES("'+oUserId.value+'","'+oUserName.value+'",'+oScore.value+')';
+
+				db.transaction(function(tx){
+					tx.executeSql(insertData);
+					selectData();
+				});
+			}
+
+			//查询数据
+			function selectData(){
+				oTable.innerHTML = '';
+
+				//c)将数据从数据库加载并在页面的表格里显示所有录入的数据，按照编号倒序显示。
+
+				//查询数据的SQL
+				var selectAll = 'SELECT * FROM score';
+
+				var resArr = [];
+				db.transaction(function(tx){
+					tx.executeSql(selectAll,[],function(tx,res){
+						var len = res.rows.length;
+						for(var i=0; i<len; i++){
+							var tempdata = {};
+							for(var name in res.rows.item(i)){
+								// console.log(name);
+								tempdata[name] = res.rows.item(i)[name];
+							}
+							resArr.push(tempdata);
+						}
+
+						//在当前作用域才能拿到resArr
+						//问题：怎么能拿到全局作用域去。
+
+						//倒序处理
+						resArr.sort(function(n1,n2){
+							return parseInt(n2['user_id']) - parseInt(n1['user_id']);
+						})
+
+						//拼DOM
+						for(var i=0; i<resArr.length; i++){
+							var oTr = document.createElement('tr');
+							var oTd1 = document.createElement('td');
+							var oTd2 = document.createElement('td');
+							var oTd3 = document.createElement('td');
+							oTd1.innerHTML = resArr[i]['user_id'];
+							oTd2.innerHTML = resArr[i]['user_name'];
+							oTd3.innerHTML = resArr[i]['score'];
+							oTr.appendChild(oTd1);
+							oTr.appendChild(oTd2);
+							oTr.appendChild(oTd3);
+							oTable.appendChild(oTr);
+						}
+						getAvg();
+
+					});
+				});
+			}
+
+			//获取平均值
+			function getAvg(){
+				oAvg.innerHTML = '';
+				var avgStr = 'SELECT avg(score) FROM (SELECT score FROM score)';
+				db.transaction(function(tx){
+					tx.executeSql(avgStr,[],function(tx,res){
+						var avg = 0;
+						for(var name in res.rows.item(0)){
+							avg = res.rows.item(0)[name];
+							avg&&(avg = avg.toFixed(2));
+						}
+						oAvg.innerHTML = avg;
+					});
+				});
+			}
+
+			function clearAll(){
+				var clearSql = 'DROP TABLE score';
+				db.transaction(function(tx){
+					tx.executeSql(clearSql,[],function(){
+						alert('删除数据表成功');
+					});
+				});
+				selectData();
+				getAvg();
+			};
+
+			//页面加载即查询，显示结果
+			selectData();
+
+			oSave.addEventListener('click',saveData);
+			oClearAll.addEventListener('click',clearAll);
+		};
+	</script>
+</body>
+</html>
